@@ -1,5 +1,5 @@
 # Genetic Lookup for Amorphous Substances (GLAS)
-Python module for solving inverse design of glasses.
+Python module for solving the inverse design of glasses.
 
 ## What is it?
 GLAS offers a helper class to facilitate the inverse design of new glasses. All the genetic algorithm code is handled by the [DEAP](https://github.com/DEAP/deap) module.

@@ -1,20 +1,23 @@
 import setuptools
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
 setuptools.setup(
     name='glas',
-    version='1.0',
+    version='0.1.0dev',
     author='Daniel Roberto Cassar',
     author_email='contact@danielcassar.com.br',
     description='Python module for solving inverse design of glasses',
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     url="https://github.com/drcassar/glas",
     packages=setuptools.find_packages(),
     install_requires=[
-        'numpy>=1.16',
-        'pandas>=1.0.0',
         'deap',
-        'mendeleev',
     ],
-    keywords='glass, non-crystalline materials, inverse design, genetic algorithm',
+    keywords=
+    'glass, non-crystalline materials, inverse design, genetic algorithm',
     classifiers=[
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
