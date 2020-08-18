@@ -8,7 +8,7 @@ setuptools.setup(
     version='0.1.0dev',
     author='Daniel Roberto Cassar',
     author_email='contact@danielcassar.com.br',
-    description='Python module for solving inverse design of glasses',
+    description='Python module for solving the inverse design of glasses',
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/drcassar/glas",
