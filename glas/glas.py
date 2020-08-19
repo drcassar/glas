@@ -1,24 +1,49 @@
-import random
-from deap import base, creator, tools
-from abc import ABC, abstractmethod
+#!/usr/bin/env python3
 
+import random
+from abc import ABC, abstractmethod
+from deap import base, creator, tools
 
 
 class GLAS(ABC):
+    '''Base class for using GLAS.
+
+    This is just a base class to build your optimization design. The recommended
+    way to use is to create a new class that is an instance of this one. At
+    least one method must be defined in this new class, which is
+    'eval_population'. It is also recommended to create a 'fitness_function'
+    method for readability, but it is not required.
+
+    You can check some examples of using GLAS at
+    https://github.com/drcassar/glas/tree/master/examples
+
+    Parameters
+    ----------
+    individual_size : int
+        How many "genes" an individual has. This is the number of compounds
+        in the chemical space.
+
+    population_size : int
+        How many individuals are present in the population. Increasing this
+        value can help the problem converge faster, but requires more
+        computational resources.
+
+    optimization_goal : 'min' or 'max'
+        Configure the type of optimization problem being solved. If 'min' then
+        individuals with lower fitness score have a higher chance of surviving,
+        otherwise if 'max',
+
+    '''
     def __init__(
             self,
             individual_size,
             population_size,
-            # fitness_function,
-            # constraints=None,
             optimization_goal='min',
     ):
         super().__init__()
 
         self.individual_size = individual_size
         self.population_size = population_size
-        # self.fitness_function = fitness_function
-        self.constraints = None
         self.optimization_goal = optimization_goal
 
         self.tournament_size = 3
@@ -29,22 +54,17 @@ class GLAS(ABC):
         self.crossover_prob = 0.5
         self.mutation_prob = 0.2
 
-    # @abstractmethod
-    # def fitness_function(self):
-    #     pass
-
     @abstractmethod
     def eval_population(self, population):
         pass
 
     def create_toolbox(self):
-
         if self.optimization_goal.lower() in ['max', 'maximum']:
             creator.create("Fitness", base.Fitness, weights=(1.0, ))
         elif self.optimization_goal.lower() in ['min', 'minimum']:
             creator.create("Fitness", base.Fitness, weights=(-1.0, ))
         else:
-            raise ValueError('Invalide optimization_goal value.')
+            raise ValueError('Invalid optimization_goal value.')
 
         creator.create("Individual", list, fitness=creator.Fitness)
 
@@ -72,19 +92,6 @@ class GLAS(ABC):
             toolbox.individual,
         )
 
-        # toolbox.register("evaluate", self.fitness_function)
-
-        if self.constraints:
-            for constraint_dic in self.constraints:
-                toolbox.decorate(
-                    'evaluate',
-                    tools.DeltaPenalty(
-                        constraint_dic['check'],
-                        constraint_dic['penalty'],
-                        constraint_dic.get('distance', None),
-                    ),
-                )
-
         toolbox.register(
             "mutate",
             tools.mutUniformInt,
@@ -111,19 +118,12 @@ class GLAS(ABC):
         self.toolbox = self.create_toolbox()
         self.population = self.toolbox.population(n=self.population_size)
         self.eval_population(self.population)
-        # fitness = list(map(self.toolbox.evaluate, self.population))
-        # fitness = self.fitness_function()
-
-        # for ind, fit in zip(self.population, fitness):
-        #     ind.fitness.values = fit
-
         self.generation = 1
 
     def callback(self):
-        print(f'Starting generation {self.generation}')
+        print(f'Finished generation {self.generation}')
         
     def run(self, num_generations=100):
-
         for _ in range(num_generations):
 
             self.callback()
@@ -145,16 +145,7 @@ class GLAS(ABC):
                     self.toolbox.mutate(mutant)
                     del mutant.fitness.values
 
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-
             self.eval_population(offspring)
-
-            # fitness = self.fitness_function()
-            # for ind, fit in zip(invalid_ind, fitness):
-            #     ind.fitness.values = fit
-
-            # The population is entirely replaced by the offspring
             self.population[:] = offspring
 
             self.generation += 1
