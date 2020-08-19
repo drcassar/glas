@@ -7,7 +7,7 @@ GLAS offers a helper class to facilitate the inverse design of new glasses. All 
 ## How to install
 The source code is hosted on GitHub at https://github.com/drcassar/glas.
 
-Binary installers for the latest released version are available at the [Python Package Index](https://pypi.org/project/glas/). To install GlassPy using pip run
+Binary installers for the latest released version are available at the [Python Package Index](https://pypi.org/project/glas/). To install GLAS using pip run
 
 ```sh
 pip install glas
