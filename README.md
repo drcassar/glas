@@ -18,7 +18,7 @@ pip install glas
 - [DEAP](https://github.com/DEAP/deap)
 
 ## Examples
-See the examples directory.
+See the [examples](https://github.com/drcassar/glas/tree/master/examples) directory.
 
 ## GLAS license
 [GPL](https://github.com/drcassar/glas/blob/master/LICENSE)

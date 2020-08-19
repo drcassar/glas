@@ -1,1 +1,4 @@
-exclude examples
+include *.md
+include LICENSE.txt
+
+exclude examples*
