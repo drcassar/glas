@@ -1,4 +1,6 @@
 # Genetic Lookup for Amorphous Substances (GLAS)
+[![DOI](https://zenodo.org/badge/284091216.svg)](https://zenodo.org/badge/latestdoi/284091216)
+
 Python module for solving the inverse design of glasses.
 
 ## What is it?
@@ -19,6 +21,9 @@ pip install glas
 
 ## Examples
 See the [examples](https://github.com/drcassar/glas/tree/master/examples) directory.
+
+## How to cite
+Daniel R. Cassar. (2020, August 19). drcassar/glas: GLAS v0.1.0.dev2 (Version v0.1.0.dev2). Zenodo. http://doi.org/10.5281/zenodo.3991781
 
 ## GLAS license
 [GPL](https://github.com/drcassar/glas/blob/master/LICENSE)
