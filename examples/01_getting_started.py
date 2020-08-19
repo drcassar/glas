@@ -6,10 +6,9 @@ trivial problem for humans to solve, but the machine does not know the trivial
 answer (that is pure silica) and must search for it.
 
 Apart from the GLAS module, to run this example you will need to have numpy
-installed.
+installed. You can do this with pip by running 'pip install numpy'
 
 '''
-
 import numpy as np
 from pprint import pprint
 from deap import tools
@@ -24,13 +23,17 @@ class Searcher(GLAS):
         compound_list,
         hof=None,
     ):
-        super().__init__(individual_size, population_size, 'max')
+        super().__init__(
+            individual_size,
+            population_size,
+            optimization_goal='max',
+        )
         self.compound_list = compound_list
         self.SiO2_idx = self.compound_list.index('SiO2')
         self.hof = hof
 
     def fitness_function(self, population):
-        '''Computes the fitness function.
+        '''Computes the fitness score.
 
         In this problem we want to find a glass with the highest silica ratio
         possible. 
@@ -43,7 +46,7 @@ class Searcher(GLAS):
         return SiO2_ratio
 
     def eval_population(self, population):
-        '''Evaluates the individuals in the population that dont have fitness.
+        '''Evaluates the individuals in the population that don't have fitness.
 
         '''
         invalid_inds = [ind for ind in population if not ind.fitness.valid]
@@ -54,13 +57,17 @@ class Searcher(GLAS):
             self.hof.update(population)
 
     def callback(self):
+        '''What to print at the start of each generation (starting from the 2nd)
+
+        '''
         best_fitness = max([ind.fitness.values[0] for ind in self.population])
-        print(f'Starting generation {self.generation}. '
-              f'Best fitness is {best_fitness:.3f}. '
-              f'Maximum fitness = 1.0')
+        print(
+            'Finished generation {0}. '.format(str(self.generation).zfill(3)),
+            f'Best fitness is {best_fitness:.3f}. '
+            f'Maximum fitness = 1.0')
 
 
-# Config
+# Paremeters of the inverse design search
 
 num_generations = 500
 population_size = 500
@@ -101,16 +108,19 @@ compound_list = [
 
 hall_of_fame = tools.HallOfFame(hall_of_fame_size)
 
-S = Searcher(len(compound_list),
-             population_size,
-             compound_list,
-             hof=hall_of_fame)
+S = Searcher(
+    len(compound_list),
+    population_size,
+    compound_list,
+    hof=hall_of_fame,
+)
 
 S.start()
 S.run(num_generations)
 
 print(f'The {hall_of_fame_size} best individual(s) found during the search '
       '(composition in mol%)\n')
+
 for n, ind in enumerate(S.hof):
     print(f'Position {n+1}')
     sum_ = 100 / sum(ind)
