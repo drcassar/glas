@@ -67,7 +67,7 @@ class Searcher(GLAS):
             f'Maximum fitness = 1.0')
 
 
-# Paremeters of the inverse design search
+# Parameters of the inverse design search
 
 num_generations = 500
 population_size = 500

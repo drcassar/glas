@@ -208,7 +208,7 @@ class Searcher(GLAS):
             f'Minimum fitness = 0')
 
 
-# Paremeters of the inverse design search
+# Parameters of the inverse design search
 
 desired_nd = 1.70
 desired_Tg = 450 + 273

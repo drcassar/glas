@@ -132,7 +132,7 @@ class Searcher(GLAS):
             f'Highest refractive index found is {best_fitness:.3g}. ')
 
 
-# Paremeters of the inverse design search
+# Parameters of the inverse design search
 
 num_generations = 500
 population_size = 500
