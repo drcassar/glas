@@ -20,7 +20,7 @@ from pprint import pprint
 from deap import tools
 from chemparse import parse_formula
 from tensorflow.keras.models import load_model
-from glas.search import GLAS
+from glas import GLAS
 
 
 class Searcher(GLAS):
