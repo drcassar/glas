@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='glas',
-    version='0.1.0.dev2',
+    version='0.1.0.dev3',
     author='Daniel Roberto Cassar',
     author_email='contact@danielcassar.com.br',
     description='Python module for solving the inverse design of glasses',
