@@ -34,6 +34,14 @@ class GLAS(ABC):
         otherwise if 'max',
 
     '''
+    tournament_size = 3
+    minimum_composition = 0
+    maximum_composition = 100
+    gene_mut_prob = 0.05
+    gene_crossover_prob = 0.5
+    crossover_prob = 0.5
+    mutation_prob = 0.2
+
     def __init__(
             self,
             individual_size,
@@ -45,14 +53,6 @@ class GLAS(ABC):
         self.individual_size = individual_size
         self.population_size = population_size
         self.optimization_goal = optimization_goal
-
-        self.tournament_size = 3
-        self.minimum_composition = 0
-        self.maximum_composition = 100
-        self.gene_mut_prob = 0.05
-        self.gene_crossover_prob = 0.5
-        self.crossover_prob = 0.5
-        self.mutation_prob = 0.2
 
     @abstractmethod
     def eval_population(self, population):
