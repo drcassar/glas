@@ -12,7 +12,7 @@ from tensorflow.keras.models import load_model
 from mendeleev import element
 
 
-base_path = Path(os.path.dirname(__file__)) / 'model'
+base_path = Path(os.path.dirname(__file__)) / 'models'
 
 class GLAS(ABC):
     '''Base class for using GLAS.
