@@ -3,6 +3,7 @@
 import random
 import pickle
 import numpy as np
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from deap import base, creator, tools
@@ -10,8 +11,8 @@ from chemparse import parse_formula
 from tensorflow.keras.models import load_model
 from mendeleev import element
 
-
-base_path = Path('files')
+__cur_path = os.path.dirname(__file__)
+base_path = Path(__cur_path)
 
 class GLAS(ABC):
     '''Base class for using GLAS.
