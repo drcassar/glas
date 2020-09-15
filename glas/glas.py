@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 
 import random
+import pickle
+import numpy as np
 from abc import ABC, abstractmethod
+from pathlib import Path
 from deap import base, creator, tools
+from chemparse import parse_formula
+from tensorflow.keras.models import load_model
+from mendeleev import element
 
+
+base_path = Path('files')
 
 class GLAS(ABC):
     '''Base class for using GLAS.
@@ -124,28 +132,171 @@ class GLAS(ABC):
         print(f'Finished generation {self.generation}')
         
     def run(self, num_generations=100):
-        for _ in range(num_generations):
+        try:
+            for _ in range(num_generations):
 
-            self.callback()
+                self.callback()
 
-            # Select the next generation individuals
-            offspring = self.toolbox.select(self.population, k=len(self.population))
-            offspring = list(map(self.toolbox.clone, offspring))
+                # Select the next generation individuals
+                offspring = self.toolbox.select(self.population, k=len(self.population))
+                offspring = list(map(self.toolbox.clone, offspring))
 
-            # Apply crossover on the offspring
-            for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                if random.random() < self.crossover_prob:
-                    self.toolbox.mate(child1, child2)
-                    del child1.fitness.values
-                    del child2.fitness.values
+                # Apply crossover on the offspring
+                for child1, child2 in zip(offspring[::2], offspring[1::2]):
+                    if random.random() < self.crossover_prob:
+                        self.toolbox.mate(child1, child2)
+                        del child1.fitness.values
+                        del child2.fitness.values
 
-            # Apply mutation on the offspring
-            for mutant in offspring:
-                if random.random() < self.mutation_prob:
-                    self.toolbox.mutate(mutant)
-                    del mutant.fitness.values
+                # Apply mutation on the offspring
+                for mutant in offspring:
+                    if random.random() < self.mutation_prob:
+                        self.toolbox.mutate(mutant)
+                        del mutant.fitness.values
 
-            self.eval_population(offspring)
-            self.population[:] = offspring
+                self.eval_population(offspring)
+                self.population[:] = offspring
 
-            self.generation += 1
+                self.generation += 1
+        except KeyboardInterrupt:
+            print('----- Interrupted by the user -----')
+
+
+class GLAS_property:
+    def __init__(self):
+
+        # Refractive index model and information
+        self.model_nd = load_model(base_path / 'model_refractive_index.h5')
+        features_nd, domain_nd, x_mean_nd, x_std_nd, nd_mean, nd_std = \
+            pickle.load(open(base_path / 'nd.p', "rb"))
+        self.x_mean_nd = x_mean_nd
+        self.x_std_nd = x_std_nd
+        self.nd_std = nd_std
+        self.nd_mean = nd_mean
+        self.domain_nd = domain_nd
+        self.features_nd = features_nd
+
+        # Glass transition temperature model and information
+        self.model_Tg = load_model(base_path /
+                                   'model_glass_transition_temperature.h5')
+        features_Tg, domain_Tg, x_mean_Tg, x_std_Tg, Tg_mean, Tg_std = \
+            pickle.load(open(base_path / 'Tg.p', "rb"))
+        self.x_mean_Tg = x_mean_Tg
+        self.x_std_Tg = x_std_Tg
+        self.Tg_std = Tg_std
+        self.Tg_mean = Tg_mean
+        self.domain_Tg = domain_Tg
+        self.features_Tg = features_Tg
+
+        # Abbe number model and information
+        self.model_abbe = load_model(base_path / 'model_abbe.h5')
+        features_abbe, domain_abbe, x_mean_abbe, x_std_abbe, abbe_mean, abbe_std = \
+            pickle.load(open(base_path / 'abbe.p', "rb"))
+        self.x_mean_abbe = x_mean_abbe
+        self.x_std_abbe = x_std_abbe
+        self.abbe_std = abbe_std
+        self.abbe_mean = abbe_mean
+        self.domain_abbe = domain_abbe
+        self.features_abbe = features_abbe
+    
+    def predict_nd(self, x):
+        x_scaled = (x - self.x_mean_nd) / self.x_std_nd
+        nd_scaled = self.model_nd.predict(x_scaled)
+        nd = nd_scaled * self.nd_std + self.nd_mean
+        return nd
+
+    def predict_Tg(self, x):
+        x_scaled = (x - self.x_mean_Tg) / self.x_std_Tg
+        Tg_scaled = self.model_Tg.predict(x_scaled)
+        Tg = Tg_scaled * self.Tg_std + self.Tg_mean
+        return Tg
+
+    def predict_abbe(self, x):
+        x_scaled = (x - self.x_mean_abbe) / self.x_std_abbe
+        abbe_scaled = self.model_abbe.predict(x_scaled)
+        abbe = abbe_scaled * self.abbe_std + self.abbe_mean
+        return abbe
+
+
+class GLAS_chemistry:
+    def __init__(
+            self,
+            compound_list,
+            domain_list,
+            domain_relax=0,
+            forced_domain={},
+            additional_elements=[],
+    ): 
+
+        # Chemical domain of the problem
+        # This is the intersection of the domain of the predictive models
+
+        all_elements = set().union(*(d.keys() for d in domain_list))
+        elemental_domain = {}
+        for element_ in sorted(all_elements):
+            minimum = max([d.get(element_, [0 ,0])[0] for d in domain_list])
+            maximum = min([d.get(element_, [0 ,0])[1] for d in domain_list])
+            elemental_domain[element_] = [minimum, maximum]
+
+        # Relaxing the domain by the domain_relax factor
+        for el, dom in elemental_domain.items():
+            elemental_domain[el] = [
+                elemental_domain[el][0] * (1 - domain_relax),
+                min(elemental_domain[el][1] * (1 + domain_relax), 1),
+            ]
+
+        # Forcing the domain for specific elements (given by the user)
+        for el, dom in forced_domain.items():
+            elemental_domain[el] = dom
+
+        # Compound dictionary and element list
+        compound_dicts = []
+        all_elements_from_comp = []
+        for comp in compound_list:
+            cdic = parse_formula(comp)
+            compound_dicts.append(cdic)
+            for el in cdic:
+                all_elements_from_comp.append(el)
+        all_elements = list(sorted(set(all_elements_from_comp) | all_elements | set(additional_elements)))
+
+        # Conversion matrix, necessary to convert compounds to atomic fraction
+        conversion_matrix = np.zeros((len(compound_list), len(all_elements)))
+        for j in range(len(compound_list)):
+            cdic = compound_dicts[j]
+            for el in cdic:
+                i = all_elements.index(el)
+                conversion_matrix[j, i] += cdic[el]
+
+        # Molar mass, necessary to convert compounds in mol to wt
+        self.molar_mass = [
+            sum([element(el).mass * num for el, num in parse_formula(comp).items()])
+            for comp in compound_list
+        ]
+        self.molar_mass = np.diag(self.molar_mass)
+
+        self.all_elements = all_elements
+        self.elemental_domain = elemental_domain
+        self.conversion_matrix = conversion_matrix
+        self.compound_list = compound_list
+
+    def population_to_atomic_array(self, pop):
+        atomic_array = pop @ self.conversion_matrix
+        sum_ = atomic_array.sum(axis=1)
+        sum_[sum_ == 0] = 1
+        atomic_array /= sum_.reshape(-1, 1)  # normalization
+        return atomic_array
+
+    def population_to_weight(self, pop):
+        weight_pct = pop @ self.molar_mass
+        sum_ = weight_pct.sum(axis=1)
+        sum_[sum_ == 0] = 1
+        weight_pct /= sum_.reshape(-1, 1)  # normalization
+        return weight_pct
+
+    def ind_to_dict(self, ind):
+        sum_ = 100 / sum(ind)
+        ind_dict = {
+            comp: round(value * sum_, 2)
+                for comp, value in zip(self.compound_list, ind) if value > 0
+        }
+        return ind_dict

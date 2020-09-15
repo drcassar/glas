@@ -1,4 +1,5 @@
 include *.md
 include LICENSE.txt
+include glas/models/*
 
 exclude examples*
