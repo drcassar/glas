@@ -11,8 +11,8 @@ from chemparse import parse_formula
 from tensorflow.keras.models import load_model
 from mendeleev import element
 
-__cur_path = os.path.dirname(__file__)
-base_path = Path(__cur_path)
+
+base_path = Path(os.path.dirname(__file__)) / 'model'
 
 class GLAS(ABC):
     '''Base class for using GLAS.
