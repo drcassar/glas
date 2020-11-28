@@ -1,20 +1,15 @@
-#!/usr/bin/env python3
-
 import random
-import pickle
-import numpy as np
-import os
 from abc import ABC, abstractmethod
-from pathlib import Path
+from types import SimpleNamespace
+from pprint import pprint
+
+import numpy as np
 from deap import base, creator, tools
 from chemparse import parse_formula
-from tensorflow.keras.models import load_model
 from mendeleev import element
 
 
-base_path = Path(os.path.dirname(__file__)) / 'models'
-
-class GLAS(ABC):
+class BaseGLAS(ABC):
     '''Base class for using GLAS.
 
     This is just a base class to build your optimization design. The recommended
@@ -57,7 +52,7 @@ class GLAS(ABC):
             population_size,
             optimization_goal='min',
     ):
-        super().__init__()
+        super(ABC).__init__()
 
         self.individual_size = individual_size
         self.population_size = population_size
@@ -163,93 +158,12 @@ class GLAS(ABC):
             print('----- Interrupted by the user -----')
 
 
-class GLAS_property:
-    def __init__(self):
-
-        # Refractive index model and information
-        self.model_nd = load_model(base_path / 'model_refractive_index.h5')
-        features_nd, domain_nd, x_mean_nd, x_std_nd, nd_mean, nd_std = \
-            pickle.load(open(base_path / 'nd.p', "rb"))
-        self.x_mean_nd = x_mean_nd
-        self.x_std_nd = x_std_nd
-        self.nd_std = nd_std
-        self.nd_mean = nd_mean
-        self.domain_nd = domain_nd
-        self.features_nd = features_nd
-
-        # Glass transition temperature model and information
-        self.model_Tg = load_model(base_path /
-                                   'model_glass_transition_temperature.h5')
-        features_Tg, domain_Tg, x_mean_Tg, x_std_Tg, Tg_mean, Tg_std = \
-            pickle.load(open(base_path / 'Tg.p', "rb"))
-        self.x_mean_Tg = x_mean_Tg
-        self.x_std_Tg = x_std_Tg
-        self.Tg_std = Tg_std
-        self.Tg_mean = Tg_mean
-        self.domain_Tg = domain_Tg
-        self.features_Tg = features_Tg
-
-        # Abbe number model and information
-        self.model_abbe = load_model(base_path / 'model_abbe.h5')
-        features_abbe, domain_abbe, x_mean_abbe, x_std_abbe, abbe_mean, abbe_std = \
-            pickle.load(open(base_path / 'abbe.p', "rb"))
-        self.x_mean_abbe = x_mean_abbe
-        self.x_std_abbe = x_std_abbe
-        self.abbe_std = abbe_std
-        self.abbe_mean = abbe_mean
-        self.domain_abbe = domain_abbe
-        self.features_abbe = features_abbe
-    
-    def predict_nd(self, x):
-        x_scaled = (x - self.x_mean_nd) / self.x_std_nd
-        nd_scaled = self.model_nd.predict(x_scaled)
-        nd = nd_scaled * self.nd_std + self.nd_mean
-        return nd
-
-    def predict_Tg(self, x):
-        x_scaled = (x - self.x_mean_Tg) / self.x_std_Tg
-        Tg_scaled = self.model_Tg.predict(x_scaled)
-        Tg = Tg_scaled * self.Tg_std + self.Tg_mean
-        return Tg
-
-    def predict_abbe(self, x):
-        x_scaled = (x - self.x_mean_abbe) / self.x_std_abbe
-        abbe_scaled = self.model_abbe.predict(x_scaled)
-        abbe = abbe_scaled * self.abbe_std + self.abbe_mean
-        return abbe
-
-
-class GLAS_chemistry:
+class ChemistryGLAS:
     def __init__(
             self,
             compound_list,
-            domain_list,
-            domain_relax=0,
-            forced_domain={},
-            additional_elements=[],
+            elements,
     ): 
-
-        # Chemical domain of the problem
-        # This is the intersection of the domain of the predictive models
-
-        all_elements = set().union(*(d.keys() for d in domain_list))
-        elemental_domain = {}
-        for element_ in sorted(all_elements):
-            minimum = max([d.get(element_, [0 ,0])[0] for d in domain_list])
-            maximum = min([d.get(element_, [0 ,0])[1] for d in domain_list])
-            elemental_domain[element_] = [minimum, maximum]
-
-        # Relaxing the domain by the domain_relax factor
-        for el, dom in elemental_domain.items():
-            elemental_domain[el] = [
-                elemental_domain[el][0] * (1 - domain_relax),
-                min(elemental_domain[el][1] * (1 + domain_relax), 1),
-            ]
-
-        # Forcing the domain for specific elements (given by the user)
-        for el, dom in forced_domain.items():
-            elemental_domain[el] = dom
-
         # Compound dictionary and element list
         compound_dicts = []
         all_elements_from_comp = []
@@ -258,7 +172,7 @@ class GLAS_chemistry:
             compound_dicts.append(cdic)
             for el in cdic:
                 all_elements_from_comp.append(el)
-        all_elements = list(sorted(set(all_elements_from_comp) | all_elements | set(additional_elements)))
+        all_elements = list(sorted(set(all_elements_from_comp) | set(elements)))
 
         # Conversion matrix, necessary to convert compounds to atomic fraction
         conversion_matrix = np.zeros((len(compound_list), len(all_elements)))
@@ -276,7 +190,6 @@ class GLAS_chemistry:
         self.molar_mass = np.diag(self.molar_mass)
 
         self.all_elements = all_elements
-        self.elemental_domain = elemental_domain
         self.conversion_matrix = conversion_matrix
         self.compound_list = compound_list
 
@@ -301,3 +214,156 @@ class GLAS_chemistry:
                 for comp, value in zip(self.compound_list, ind) if value > 0
         }
         return ind_dict
+
+
+class SimpleGLAS(BaseGLAS, ChemistryGLAS):
+
+    base_penalty = 1000
+    report_frequency = 50
+
+    def __init__(self, config, design, constraints={}):
+        self.config = SimpleNamespace(**config)
+        self.design = design
+
+        self.hof = tools.HallOfFame(self.config.hall_of_fame_size)
+
+        BaseGLAS.__init__(
+            self,
+            individual_size=len(self.config.compound_list),
+            population_size=self.config.population_size,
+            optimization_goal='min',
+        )
+
+        ChemistryGLAS.__init__(
+            self,
+            self.config.compound_list,
+            [element(n).symbol for n in range(1, 93)],
+        )
+
+        domain_list = []
+        self.models = {}
+        self.report = {}
+        for ID in design:
+            cls = design[ID]['class'](
+                all_elements=self.all_elements,
+                compound_list=self.config.compound_list,
+                **design[ID].get('info', {}),
+            )
+            if design[ID]['use_for_optimization']:
+                domain_list.append(cls.get_domain())
+                self.models[ID] = cls
+            else:
+                self.report[ID] = cls
+
+        self.penalties = []
+        for ID in constraints:
+            cls = constraints[ID]['class']
+            self.penalties.append(
+                cls(
+                    constraints[ID]['config'],
+                    domain_list=domain_list,
+                    all_elements=self.all_elements,
+                    **config,
+                )
+            )
+
+    def fitness_function(self, population):
+        pop_dict = {
+            'population_array': np.array(population),
+            'population_weight': self.population_to_weight(population),
+            'atomic_array': self.population_to_atomic_array(population),
+        }
+
+        fitness = np.zeros(len(population))
+
+        for ID in self.models:
+            y_pred = self.models[ID].predict(pop_dict)
+            conf = self.design[ID]['config']
+
+            is_higher_than_max = np.greater(y_pred, conf['max'])
+            is_lower_than_min = np.less(y_pred, conf['min'])
+            wr = is_within_range = np.logical_not(
+                np.logical_or(is_higher_than_max, is_lower_than_min)
+            )
+
+            x0 = conf['min']
+            y0 = conf['weight'] if conf['objective'] == 'maximize' else 0
+
+            x1 = conf['max']
+            y1 = conf['weight'] if conf['objective'] == 'minimize' else 0
+
+            m = (y1 - y0) / (x1 - x0)
+
+            fitness[is_within_range] = fitness[is_within_range] + \
+                m * (y_pred[is_within_range] - x0) + y0
+
+            fitness[~wr] = fitness[~wr] + self.base_penalty + \
+                is_higher_than_max[~wr] * (y_pred[~wr] - conf['max'])**2 + \
+                is_lower_than_min[~wr] * (conf['min'] - y_pred[~wr])**2
+                
+        for cls in self.penalties:
+            penalty = cls.compute(pop_dict, self.base_penalty)
+            fitness += penalty
+
+        return fitness
+
+    def eval_population(self, population):
+        invalid_inds = [ind for ind in population if not ind.fitness.valid]
+        for ind, fit in zip(invalid_inds, self.fitness_function(invalid_inds)):
+            ind.fitness.values = (fit, )  # fitness value must be a tuple
+        if self.hof is not None:
+            self.hof.update(population)
+
+    def report_dict(self, individual, verbose=True):
+        report_dict = {}
+        ind_array = np.array(individual).reshape(1,-1)
+
+        pop_dict = {
+            'population_array': ind_array,
+            'population_weight': self.population_to_weight(ind_array),
+            'atomic_array': self.population_to_atomic_array(ind_array),
+        }
+
+        if verbose:
+            pprint(self.ind_to_dict(individual))
+
+        if verbose:
+            print()
+            print('Predicted properties of this individual:')
+
+        for ID in self.models:
+            y_pred = self.models[ID].predict(pop_dict)[0]
+            report_dict[ID] = y_pred
+            if verbose:
+                print(f'{self.design[ID]["name"]} = {y_pred:.3f} '
+                      f'{self.design[ID].get("unit", "")}')
+
+        for ID in self.report:
+            y_pred = self.report[ID].predict(pop_dict)[0]
+            within_domain = self.report[ID].is_within_domain(pop_dict)[0]
+            if within_domain:
+                report_dict[ID] = y_pred
+                if verbose:
+                    print(f'{self.design[ID]["name"]} = {y_pred:.3f} '
+                        f'{self.design[ID].get("unit", "")}')
+            elif verbose:
+                print(f'{self.design[ID]["name"]} = Out of domain')
+
+        if verbose:
+            print()
+            print()
+
+        return report_dict
+
+    def callback(self):
+        best_fitness = min([ind.fitness.values[0] for ind in self.population])
+        print(
+            'Finished generation {0}. '.format(str(self.generation).zfill(3)),
+            f'Best fitness is {best_fitness:.3g}. '
+        )
+
+        if self.generation % self.report_frequency == 0:
+            if best_fitness < self.base_penalty:
+                best_ind = tools.selBest(self.population, 1)[0]
+                print('\nBest individual in this population (in mol%):')
+                self.report_dict(best_ind, verbose=True)
