@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='glas',
-    version='0.1.0.dev3',
+    version='0.1.0',
     author='Daniel Roberto Cassar',
     author_email='contact@danielcassar.com.br',
-    description='Python module for solving the inverse design of glasses',
+    description='Python module for solving the inverse design of materials',
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/drcassar/glas",
@@ -17,7 +17,7 @@ setuptools.setup(
         'deap',
     ],
     keywords=
-    'glass, non-crystalline materials, inverse design, genetic algorithm',
+    'materials design, inverse design, genetic algorithm',
     classifiers=[
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",

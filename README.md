@@ -1,10 +1,10 @@
-# Genetic Lookup for Amorphous Substances (GLAS)
-[![DOI](https://zenodo.org/badge/284091216.svg)](https://zenodo.org/badge/latestdoi/284091216)
+# Genetic Lookup for Apt Substances (GLAS)
+[![DOI](https://zenodo.org/badge/284091216.svg)](https://zenodo.org/badge/latestdoi/284091216) [![arXiv](https://img.shields.io/badge/arXiv-2008.09187-b31b1b.svg)](https://arxiv.org/abs/2008.09187)
 
-Python module for solving the inverse design of glasses.
+Python module for solving the inverse design of materials.
 
 ## What is it?
-GLAS offers a helper class to facilitate the inverse design of new glasses. All the genetic algorithm code is handled by the [DEAP](https://github.com/DEAP/deap) module.
+GLAS offers a helper class to facilitate the inverse design of new materials. All the genetic algorithm code is handled by the [DEAP](https://github.com/DEAP/deap) module.
 
 ## How to install
 The source code is hosted on GitHub at https://github.com/drcassar/glas.
@@ -23,7 +23,7 @@ pip install glas
 See the [examples](https://github.com/drcassar/glas/tree/master/examples) directory.
 
 ## How to cite
-Daniel R. Cassar. (2020, August 19). drcassar/glas: GLAS v0.1.0.dev2 (Version v0.1.0.dev2). Zenodo. http://doi.org/10.5281/zenodo.3991781
+Cassar, D.R., Santos, G.G., and Zanotto, E.D. (2020). Designing optical glasses by machine learning coupled with genetic algorithms. ArXiv:2008.09187 [Cond-Mat, Physics:Physics].
 
 ## GLAS license
 [GPL](https://github.com/drcassar/glas/blob/master/LICENSE)
