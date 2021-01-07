@@ -1,4 +1,5 @@
 import random
+from multiprocessing import Pool
 from abc import ABC, abstractmethod
 from types import SimpleNamespace
 from pprint import pprint
@@ -51,12 +52,14 @@ class BaseGLAS(ABC):
             individual_size,
             population_size,
             optimization_goal='min',
+            num_jobs=1,
     ):
         super(ABC).__init__()
 
         self.individual_size = individual_size
         self.population_size = population_size
         self.optimization_goal = optimization_goal
+        self.num_jobs = num_jobs
 
     @abstractmethod
     def eval_population(self, population):
@@ -115,6 +118,10 @@ class BaseGLAS(ABC):
             tools.cxUniform,
             indpb=self.gene_crossover_prob,
         )
+
+        if self.num_jobs != 1:
+            pool = Pool(processes=self.num_jobs)
+            toolbox.register("map", pool.map)
 
         return toolbox
 
@@ -221,7 +228,7 @@ class SimpleGLAS(BaseGLAS, ChemistryGLAS):
     base_penalty = 1000
     report_frequency = 50
 
-    def __init__(self, config, design, constraints={}):
+    def __init__(self, config, design, constraints={}, num_jobs=1):
         self.config = SimpleNamespace(**config)
         self.design = design
 
@@ -232,6 +239,7 @@ class SimpleGLAS(BaseGLAS, ChemistryGLAS):
             individual_size=len(self.config.compound_list),
             population_size=self.config.population_size,
             optimization_goal='min',
+            num_jobs=num_jobs,
         )
 
         ChemistryGLAS.__init__(
