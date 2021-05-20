@@ -19,6 +19,7 @@ setuptools.setup(
         'tensorflow',
         'chemparse',
         'mendeleev',
+        'multiprocess',
     ],
     keywords=
     'glass, non-crystalline materials, inverse design, genetic algorithm',

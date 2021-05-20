@@ -1,11 +1,12 @@
 import random
-from multiprocessing import Pool
+import operator
+from multiprocess import Pool  # https://stackoverflow.com/a/65001152
 from abc import ABC, abstractmethod
 from types import SimpleNamespace
 from pprint import pprint
 
 import numpy as np
-from deap import base, creator, tools
+from deap import base, creator, tools, gp
 from chemparse import parse_formula
 from mendeleev import element
 
@@ -39,31 +40,112 @@ class BaseGLAS(ABC):
         otherwise if 'max',
 
     '''
+    mutation_prob = 0.2
+    mating_prob = 0.5
+
+    def __init__(self, population_size):
+        super().__init__()
+        self.population_size = population_size
+
+    @abstractmethod
+    def eval_population(self, population):
+        pass
+
+    @abstractmethod
+    def create_toolbox(self):
+        pass
+
+    def start(self):
+        self.toolbox = self.create_toolbox()
+        self.population = self.toolbox.population(n=self.population_size)
+        self.eval_population(self.population)
+        self.generation = 1
+
+    def callback(self):
+        print(f'Finished generation {self.generation}')
+        
+    def run(self, num_generations=100):
+        try:
+            for _ in range(num_generations):
+
+                self.callback()
+
+                # Select the next generation individuals
+                offspring = self.toolbox.select(self.population,
+                                                k=len(self.population))
+                offspring = list(map(self.toolbox.clone, offspring))
+
+                # Apply crossover on the offspring
+                for child1, child2 in zip(offspring[::2], offspring[1::2]):
+                    if random.random() < self.mating_prob:
+                        self.toolbox.mate(child1, child2)
+                        del child1.fitness.values
+                        del child2.fitness.values
+
+                # Apply mutation on the offspring
+                for mutant in offspring:
+                    if random.random() < self.mutation_prob:
+                        self.toolbox.mutate(mutant)
+                        del mutant.fitness.values
+
+                self.eval_population(offspring)
+                self.population[:] = offspring
+
+                self.generation += 1
+
+        except KeyboardInterrupt:
+            print('----- Interrupted by the user -----')
+
+
+class BaseChemistryGLAS(BaseGLAS):
+
+    gene_crossover_prob = 0.5
     tournament_size = 3
+    gene_mut_prob = 0.05
     minimum_composition = 0
     maximum_composition = 100
-    gene_mut_prob = 0.05
-    gene_crossover_prob = 0.5
-    crossover_prob = 0.5
-    mutation_prob = 0.2
 
     def __init__(
             self,
             individual_size,
             population_size,
+            compound_list,
+            elements,
             optimization_goal='min',
-            num_jobs=1,
-    ):
-        super(ABC).__init__()
+    ): 
+        super().__init__(population_size)
 
         self.individual_size = individual_size
-        self.population_size = population_size
         self.optimization_goal = optimization_goal
-        self.num_jobs = num_jobs
 
-    @abstractmethod
-    def eval_population(self, population):
-        pass
+        # Compound dictionary and element list
+        compound_dicts = []
+        all_elements_from_comp = []
+        for comp in compound_list:
+            cdic = parse_formula(comp)
+            compound_dicts.append(cdic)
+            for el in cdic:
+                all_elements_from_comp.append(el)
+        all_elements = list(sorted(set(all_elements_from_comp) | set(elements)))
+
+        # Conversion matrix, necessary to convert compounds to atomic fraction
+        conversion_matrix = np.zeros((len(compound_list), len(all_elements)))
+        for j in range(len(compound_list)):
+            cdic = compound_dicts[j]
+            for el in cdic:
+                i = all_elements.index(el)
+                conversion_matrix[j, i] += cdic[el]
+
+        # Molar mass, necessary to convert compounds in mol to wt
+        self.molar_mass = [
+            sum([element(el).mass * num for el, num in parse_formula(comp).items()])
+            for comp in compound_list
+        ]
+        self.molar_mass = np.diag(self.molar_mass)
+
+        self.all_elements = all_elements
+        self.conversion_matrix = conversion_matrix
+        self.compound_list = compound_list
 
     def create_toolbox(self):
         if self.optimization_goal.lower() in ['max', 'maximum']:
@@ -119,86 +201,7 @@ class BaseGLAS(ABC):
             indpb=self.gene_crossover_prob,
         )
 
-        if self.num_jobs != 1:
-            pool = Pool(processes=self.num_jobs)
-            toolbox.register("map", pool.map)
-
         return toolbox
-
-    def start(self):
-        self.toolbox = self.create_toolbox()
-        self.population = self.toolbox.population(n=self.population_size)
-        self.eval_population(self.population)
-        self.generation = 1
-
-    def callback(self):
-        print(f'Finished generation {self.generation}')
-        
-    def run(self, num_generations=100):
-        try:
-            for _ in range(num_generations):
-
-                self.callback()
-
-                # Select the next generation individuals
-                offspring = self.toolbox.select(self.population, k=len(self.population))
-                offspring = list(map(self.toolbox.clone, offspring))
-
-                # Apply crossover on the offspring
-                for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                    if random.random() < self.crossover_prob:
-                        self.toolbox.mate(child1, child2)
-                        del child1.fitness.values
-                        del child2.fitness.values
-
-                # Apply mutation on the offspring
-                for mutant in offspring:
-                    if random.random() < self.mutation_prob:
-                        self.toolbox.mutate(mutant)
-                        del mutant.fitness.values
-
-                self.eval_population(offspring)
-                self.population[:] = offspring
-
-                self.generation += 1
-        except KeyboardInterrupt:
-            print('----- Interrupted by the user -----')
-
-
-class ChemistryGLAS:
-    def __init__(
-            self,
-            compound_list,
-            elements,
-    ): 
-        # Compound dictionary and element list
-        compound_dicts = []
-        all_elements_from_comp = []
-        for comp in compound_list:
-            cdic = parse_formula(comp)
-            compound_dicts.append(cdic)
-            for el in cdic:
-                all_elements_from_comp.append(el)
-        all_elements = list(sorted(set(all_elements_from_comp) | set(elements)))
-
-        # Conversion matrix, necessary to convert compounds to atomic fraction
-        conversion_matrix = np.zeros((len(compound_list), len(all_elements)))
-        for j in range(len(compound_list)):
-            cdic = compound_dicts[j]
-            for el in cdic:
-                i = all_elements.index(el)
-                conversion_matrix[j, i] += cdic[el]
-
-        # Molar mass, necessary to convert compounds in mol to wt
-        self.molar_mass = [
-            sum([element(el).mass * num for el, num in parse_formula(comp).items()])
-            for comp in compound_list
-        ]
-        self.molar_mass = np.diag(self.molar_mass)
-
-        self.all_elements = all_elements
-        self.conversion_matrix = conversion_matrix
-        self.compound_list = compound_list
 
     def population_to_atomic_array(self, pop):
         atomic_array = pop @ self.conversion_matrix
@@ -223,29 +226,23 @@ class ChemistryGLAS:
         return ind_dict
 
 
-class SimpleGLAS(BaseGLAS, ChemistryGLAS):
+class GlassSearcher(BaseChemistryGLAS):
 
     base_penalty = 1000
     report_frequency = 50
 
-    def __init__(self, config, design, constraints={}, num_jobs=1):
+    def __init__(self, config, design, constraints={}):
         self.config = SimpleNamespace(**config)
         self.design = design
 
         self.hof = tools.HallOfFame(self.config.hall_of_fame_size)
 
-        BaseGLAS.__init__(
-            self,
+        super().__init__(
             individual_size=len(self.config.compound_list),
             population_size=self.config.population_size,
+            compound_list=self.config.compound_list,
             optimization_goal='min',
-            num_jobs=num_jobs,
-        )
-
-        ChemistryGLAS.__init__(
-            self,
-            self.config.compound_list,
-            [element(n).symbol for n in range(1, 93)],
+            elements=[element(n).symbol for n in range(1, 93)],
         )
 
         domain_list = []
@@ -375,3 +372,132 @@ class SimpleGLAS(BaseGLAS, ChemistryGLAS):
                 best_ind = tools.selBest(self.population, 1)[0]
                 print('\nBest individual in this population (in mol%):')
                 self.report_dict(best_ind, verbose=True)
+
+
+class GPSR(BaseGLAS):
+
+    chance_select_ind_lower_lenght = 0.65  # min 0.5, max 1
+    tournament_fitness_first = True
+    tree_max_depth = 17
+    tournment_size = 3
+
+    def __init__(self, config, num_jobs=1):
+        self.config = SimpleNamespace(**config)
+        self.hof = tools.HallOfFame(self.config.hall_of_fame_size)
+
+        super().__init__(self.config.population_size)
+
+        self.pset = self.config.pset
+        self.optimization_goal = self.config.optimization_goal
+        self.num_jobs = num_jobs
+
+    def create_toolbox(self):
+
+        # https://deap.readthedocs.io/en/master/api/gp.html#deap.gp.PrimitiveTree
+        # https://deap.readthedocs.io/en/master/tutorials/advanced/gp.html
+        # https://deap.readthedocs.io/en/master/tutorials/basic/part4.html
+
+        if self.optimization_goal.lower() in ['max', 'maximum']:
+            creator.create("Fitness", base.Fitness, weights=(1.0, ))
+        elif self.optimization_goal.lower() in ['min', 'minimum']:
+            creator.create("Fitness", base.Fitness, weights=(-1.0, ))
+        else:
+            raise ValueError('Invalid optimization_goal value.')
+
+        creator.create("Individual", gp.PrimitiveTree,
+                        fitness=creator.Fitness)
+
+        toolbox = base.Toolbox()
+
+        if self.num_jobs != 1:
+            pool = Pool(processes=self.num_jobs)
+            toolbox.register("map", pool.map)
+
+        toolbox.register(
+            "expr",
+            gp.genHalfAndHalf,
+            pset=self.pset,
+            min_=1,
+            max_=2,
+        )
+
+        toolbox.register(
+            "individual",
+            tools.initIterate,
+            creator.Individual,
+            toolbox.expr,
+        )
+
+        toolbox.register(
+            "population",
+            tools.initRepeat,
+            list,
+            toolbox.individual,
+        )
+
+        toolbox.register("compile", gp.compile, pset=self.pset)
+
+        def evalfun(individual, x, y, fitfun, pset):
+            compiled_fun = gp.compile(individual, pset)
+            y_pred = np.array([compiled_fun(*a) for a in x])
+            if all(np.isfinite(y_pred)):
+                fitness = (fitfun(y, y_pred), )
+            else:
+                fitness = (np.nan, )
+            return fitness
+
+        toolbox.register(
+            "evaluate",
+            evalfun,
+            x=self.config.x,
+            y=self.config.y,
+            fitfun=self.config.fitfun,
+            pset=self.pset,
+        )
+
+        toolbox.register("expr_mut", gp.genFull, min_=0, max_=2)
+        toolbox.register(
+            "mutate",
+            gp.mutUniform,
+            expr=toolbox.expr_mut,
+            pset=self.pset,
+        )
+        toolbox.decorate(
+            "mutate",
+            gp.staticLimit(
+                key=operator.attrgetter("height"),
+                max_value=self.tree_max_depth
+            )
+        )
+
+        toolbox.register(
+            "select",
+            tools.selDoubleTournament,
+            fitness_size=self.tournment_size,
+            parsimony_size=self.chance_select_ind_lower_lenght * 2,
+            fitness_first=self.tournament_fitness_first, 
+        )
+
+        toolbox.register("mate", gp.cxOnePoint)
+        toolbox.decorate(
+            "mate",
+            gp.staticLimit(
+                key=operator.attrgetter("height"),
+                max_value=self.tree_max_depth
+            )
+        )
+
+        return toolbox
+
+    def eval_population(self, population):
+        invalid_inds = [ind for ind in population if not ind.fitness.valid]
+        fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_inds)
+        for ind, fit in zip(invalid_inds, fitnesses):
+            ind.fitness.values = fit
+        if self.hof is not None:
+            self.hof.update(population)
+
+    def eval_individual(self, individual, x):
+        compiled_fun = self.toolbox.compile(expr=individual)
+        y_pred = np.array([compiled_fun(*a) for a in x])
+        return y_pred
