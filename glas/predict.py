@@ -4,7 +4,11 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 
 import numpy as np
-from tensorflow.keras.models import load_model
+
+try:
+    from tensorflow.keras.models import load_model
+except ModuleNotFoundError:
+    pass
 
 
 base_path = Path(os.path.dirname(__file__)) / 'models'
