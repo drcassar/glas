@@ -16,7 +16,7 @@ setuptools.setup(
     install_requires=[
         'deap',
         'numpy',
-        'tensorflow',
+        # 'tensorflow',
         'chemparse',
         'mendeleev',
         'multiprocess',
